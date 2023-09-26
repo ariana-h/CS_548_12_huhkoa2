@@ -3,9 +3,10 @@ import numpy as np
 import cv2
 from tensorflow.keras.datasets import mnist, cifar10
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import InputLayer, Dense, Flatten, Conv2D, MaxPooling2D, Add
+from tensorflow.keras.layers import InputLayer, Dense, Flatten, Conv2D, MaxPooling2D, Add, Lambda
 from tensorflow.keras.models import Model
 from tensorflow.keras import Input
+from tensorflow.keras.applications.vgg19 import VGG19
 import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -92,12 +93,29 @@ def main():
     
     x = MaxPooling2D(2)(x)
     
-    
     x = Flatten()(x)
     x = Dense(32, activation="relu")(x)
     my_output = Dense(10, activation="softmax")(x)
     
     model = Model(inputs=my_input, outputs=my_output)
+    
+    
+    base_model = VGG19(weights = "imagenet", include_top=False)
+    for layer in base_model.layers:
+        layer.trainable = False
+    
+    true_input = Input(shape=x_train.shape[1:])
+    resized = Lambda(input_shape=x_train.shape[1:],
+                     function=lambda images:tf.image.resize(images, [224,224]))(true_input)
+    
+    x=base_model(resized)
+    x = Flatten()(x)
+    x = Dense(1024,activation="relu")(x)
+    x = Dense(1024,activation="relu")(x)
+    x = Dense(10,activation="softmax")(x)
+    
+    model = Model(inputs=true_input, outputs=x)
+    
     
     model.summary()
     
@@ -105,8 +123,10 @@ def main():
                   loss="sparse_categorical_crossentropy",
                   metrics=["accuracy"])
     
+    tb_callback = tf.keras.callbacks.TensorBoard(log_dir="logs", 
+                                                 histogram_freq=1)
     
-    model.fit(x_train, y_train, batch_size=32, epochs=5)
+    model.fit(x_train, y_train, batch_size=32, epochs=5, callbacks=tb_callback)
     
     train_scores = model.evaluate(x_train, y_train, 
                                   batch_size=128)
