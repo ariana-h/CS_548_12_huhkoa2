@@ -9,9 +9,61 @@ from tensorflow.keras import Input
 from tensorflow.keras.applications.vgg19 import VGG19
 import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
+import os
+from sklearn.model_selection import train_test_split
+
+
+def load_catdog_filenames(basedir):
+    all_filenames = os.listdir(basedir)    
+    
+    train_list, test_list = train_test_split(all_filenames,
+                                             train_size=0.70,
+                                             random_state=42)
+    
+    train_ds = tf.data.Dataset.from_tensor_slices(train_list)
+    
+    test_ds = tf.data.Dataset.from_tensor_slices(test_list)
+    
+    def load_image(x):
+        if tf.strings.regex_full_match(x, "dog.*"):
+            label = 0
+        else:
+            label = 1
+        rawdata = tf.io.read_file(basedir + "/" + x)
+        image = tf.io.decode_jpeg(rawdata)
+        image = tf.image.convert_image_dtype(image, tf.float32)
+        image = tf.image.resize(image, (32,32))
+        return image, label
+    
+    train_ds = train_ds.map(load_image)
+    test_ds = test_ds.map(load_image)
+    
+    
+    
+    
+    train_iter = iter(train_ds)
+    
+    for _ in range(5):
+        x = next(train_iter)
+        image = x[0]
+        label = x[1]
+        image = image.numpy()
+        lable = label.numpy()
+        #x = x.numpy()
+        #print(x.shape)
+        
+    exit(1)
+    
+    return train_list, test_list
+
+
 
 
 def main():
+    
+    train_list, test_list = load_catdog_filenames("../catdog")
+    print(train_list)
+    
     print("HELLO")
     (x_train, y_train), (x_test, y_test) = cifar10.load_data()
     
@@ -35,6 +87,23 @@ def main():
     print("x_train AFTER:", x_train.shape)
     print("x_test AFTER:", x_test.shape)
     print("Image type AFTER:", x_train.dtype)  
+    
+    train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train))
+    
+    test_ds = tf.data.Dataset.from_tensor_slices((x_test, y_test))
+    
+    
+    train_cnt = train_ds.cardinality()
+    print("Number of training samples:", train_cnt)
+    train_ds = train_ds.shuffle(train_cnt)
+    
+    train_ds = train_ds.batch(64)
+    
+    test_ds = test_ds.batch(64)
+    
+    #for image,label in train_ds:
+    #    print("IMAGE:", image.numpy().shape)
+    #    print("LABEL:", label.numpy().shape)
         
     '''
     model = Sequential()
@@ -119,14 +188,18 @@ def main():
     
     model.summary()
     
-    model.compile(optimizer="adam",
+    optimizer = tf.keras.optimizers.Adam()
+    model.compile(optimizer=optimizer,
                   loss="sparse_categorical_crossentropy",
                   metrics=["accuracy"])
     
     tb_callback = tf.keras.callbacks.TensorBoard(log_dir="logs", 
                                                  histogram_freq=1)
     
-    model.fit(x_train, y_train, batch_size=32, epochs=5, callbacks=tb_callback)
+    #model.fit(x_train, y_train, batch_size=32, epochs=5, callbacks=[tb_callback])
+    
+    model.fit(train_ds, epochs=5, validation_data=test_ds, callbacks=[tb_callback])
+    
     
     train_scores = model.evaluate(x_train, y_train, 
                                   batch_size=128)
