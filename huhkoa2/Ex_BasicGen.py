@@ -3,19 +3,20 @@ import numpy as np
 import cv2
 from tensorflow.keras.datasets import mnist, cifar10
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import (InputLayer, 
-                                     Dense, 
-                                     Flatten, 
-                                     Conv2D, 
-                                     MaxPooling2D, 
-                                     Concatenate,
+from tensorflow.keras.layers import (InputLayer,
+                                     Dense,
+                                     Flatten,
+                                     Conv2D,
                                      Dropout,
-                                     Add, 
-                                     Lambda, 
-                                     ReLU, 
-                                     LeakyReLU,
+                                     MaxPooling2D,
+                                     Concatenate,
+                                     Conv2DTranspose,
                                      BatchNormalization,
-                                     Reshape)
+                                     ReLU,
+                                     LeakyReLU,
+                                     Reshape,
+                                     Lambda,
+                                     Add)
 from tensorflow.keras.models import Model
 from tensorflow.keras import Input
 from tensorflow.keras.applications.vgg19 import VGG19
@@ -133,7 +134,8 @@ def main():
                             real_output)
         return fake_loss + real_loss
     
-    
+    gen_opt = tf.keras.optimizers.Adam(1e-4)
+    dis_opt = tf.keras.optimizers.Adam(1e-4)
     
     @tf.function
     def train_step(images):
@@ -219,7 +221,8 @@ def main():
         ave_gen_loss /= batch_index
         ave_dis_loss /= batch_index
             
-            #need to finish
+        print("AVERAGE:", ave_gen_loss, ave_dis_loss)
+    cv2.destroyAllWindows()
 
 
 if __name__== "__main__":
