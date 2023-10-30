@@ -9,5 +9,6 @@ Pipfile.lock
 logs/
 data/
 pylogs/
-Assign02/logs
-Assign02/training_checkpoints
+Try/logs
+Try/training_checkpoints
+Assign02/Facades
