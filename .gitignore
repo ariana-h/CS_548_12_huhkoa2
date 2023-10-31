@@ -12,3 +12,5 @@ pylogs/
 Try/logs
 Try/training_checkpoints
 Assign02/Facades
+checkpoints/
+results/
