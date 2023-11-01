@@ -11,6 +11,6 @@ data/
 pylogs/
 Try/logs
 Try/training_checkpoints
-Assign02/Facades
 checkpoints/
+Assign02/Facades/
 results/
