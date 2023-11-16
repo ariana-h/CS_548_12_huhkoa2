@@ -107,6 +107,9 @@ class NeuralNetwork(nn.Module):
 
 
 def main():
+    config = TrainingConfig()
+    
+    
     writer = SummaryWriter(log_dir="./pylogs")
     
     data_transform = v2.Compose([
@@ -153,12 +156,11 @@ def main():
     
     
     train_dataloader = DataLoader(training_dataset,
-                                  batch_size = config.train_batch_size)
-    base_train_dataloader = DataLoader(training_dataset,
-                                  batch_size = config.train_batch_size)
-    
+                                  batch_size=config.train_batch_size)
+    base_train_dataloader = DataLoader(base_training_dataset,
+                                  batch_size=config.train_batch_size)
     test_dataloader = DataLoader(testing_dataset,
-                                  batch_size = config.eval_batch_size)
+                                 batch_size=config.eval_batch_size)
     
 
     model = NeuralNetwork(class_cnt, input_channels)
@@ -197,7 +199,7 @@ def main():
     total_epochs = 10
     
     def train(dataloader, model, loss_fn, 
-              optimizer, accelerate):
+              optimizer, accelerator):
         size = len(dataloader.dataset)
         model.train()
         for batch, (X,y) in enumerate(dataloader):
@@ -262,8 +264,8 @@ def main():
         
         accelerator = Accelerator(
             mixed_precision = config.mixed_precision,
-            gradient_accumulation_steps = config.gradient_acculumation_steps
-            log_with= "tensorboard"
+            gradient_accumulation_steps = config.gradient_acculumation_steps,
+            log_with= "tensorboard",
             project_dir=os.path.join(config.output_dir, "logs")
         )
         
