@@ -14,3 +14,6 @@ Try/training_checkpoints
 checkpoints/
 Assign02/Facades/
 results/
+catdog/
+BasicGenTrain/
+BasicVAE/
