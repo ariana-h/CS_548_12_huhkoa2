@@ -18,3 +18,5 @@ catdog/
 BasicGenTrain/
 BasicVAE/
 Assign03/train_images
+Assign03/gen_model
+Assign03/gen_images

@@ -2,25 +2,26 @@ import os
 import cv2
 import numpy as np
 import torch
-from torch.utils.data import DataLoader
-import torch.nn.functional as F 
+from torch.utils.data import DataLoader, Dataset
 from diffusers import UNet2DModel, DDPMScheduler, DDPMPipeline
 from diffusers.utils import make_image_grid, pt_to_pil
 from dataclasses import dataclass
 from transformers import get_cosine_schedule_with_warmup
 import tqdm
 from accelerate import Accelerator, notebook_launcher
+from torchvision import transforms
+from diffusers.utils import pt_to_pil
 
 @dataclass
 class TrainingConfig:
-    image_size = 128
+    image_size = 64
     train_batch_size = 16
     eval_batch_size = 16
     mixed_precision = "fp16"
-    output_dir = "gen_model"
+    output_dir = "Assign03/gen_model"
     gradient_accumulation_steps = 1
     start_epoch = 0
-    total_epochs = 100
+    total_epochs = 20 #100
     learning_rate = 1e-4
     lr_warmup_steps = 500
     save_image_epochs = 10
@@ -28,26 +29,43 @@ class TrainingConfig:
     overwrite_output_dir = True
     seed = 0
 
+class ImageDataset(Dataset):
+    def __init__(self, folder_path, transform=None):
+        self.folder_path = folder_path
+        self.transform = transform
+        self.image_list = [os.path.join(folder_path, filename) for filename in os.listdir(folder_path)]
 
-def load_images_from_folder(folder_path):
-    images = []
-    for filename in os.listdir(folder_path):
-        img_path = os.path.join(folder_path, filename)
-        image = cv2.imread(img_path)
-        if image is not None:
-            images.append(image)
-    return images
+    def __len__(self):
+        return len(self.image_list)
+
+    def __getitem__(self, idx):
+        img_path = self.image_list[idx]
+        images = cv2.imread(img_path)
+ 
+        if self.transform:
+            images = self.transform(images)
+
+        return {"images": images}
 
 
 def main():
     config = TrainingConfig()
-   
-    images = load_images_from_folder('Assign03/train_images')
     
-    dataloader = DataLoader(images,
+    transform = transforms.Compose([
+        transforms.ToPILImage(),
+        transforms.Resize((config.image_size, config.image_size)),
+        transforms.ToTensor(),
+    ])
+
+    dataset = ImageDataset('Assign03/train_images', transform=transform)
+    
+    dataloader = DataLoader(dataset,
                             batch_size=config.train_batch_size,
                             shuffle=True)
- 
+    device = ("cuda" if torch.cuda.is_available()
+              else "mps" if torch.backends.mps.is_available()
+              else "cpu")
+    
     model = UNet2DModel(
         in_channels = 3,
         out_channels = 3,
@@ -65,9 +83,8 @@ def main():
             "AttnUpBlock2D",
             "UpBlock2D","UpBlock2D","UpBlock2D","UpBlock2D"
         ]        
-    )
+    ).to(device)
     print(model)
-    
     
     noise_scheduler = DDPMScheduler(num_train_timesteps=1000)
     optimizer = torch.optim.AdamW(model.parameters(),
@@ -90,43 +107,13 @@ def main():
         lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
         print("Loading previous checkpoint...")
     
-    def evaluate(config, epoch, model, latents_shape):
-        upleft = torch.randn(latents_shape,
-                             generator=torch.manual_seed(
-                                 config.seed))
-        upright = torch.randn(latents_shape,
-                             generator=torch.manual_seed(
-                                 config.seed+1))
-        downleft = torch.randn(latents_shape,
-                             generator=torch.manual_seed(
-                                 config.seed+2))
-        downright = torch.randn(latents_shape,
-                             generator=torch.manual_seed(
-                                 config.seed+3))
+    def evaluate(config, epoch, pipeline):
+        images = pipeline(
+            batch_size=config.eval_batch_size,
+            generator=torch.manual_seed(config.seed)
+        ).images
         
-        def sample(u,v,upleft,upright,downleft,downright):
-            up = upleft + (upright - upleft)*u
-            down = downleft + (downright - downleft)*u
-            
-            s = up + (down - up)*v
-            return s
-        
-        cnt = int(np.sqrt(config.eval_batch_size))
-        all_noise = []
-        
-        for v in np.linspace(0, 1, cnt):
-            for u in np.linspace(0,1,cnt):
-                all_noise.append(sample(u,v,
-                                        upleft,upright,
-                                        downleft,downright))
-                
-        all_noise = torch.stack(all_noise)
-        all_noise = all_noise.to(model.device)
-        images = model.decode(all_noise).sample
-        images = images.cpu().detach()
-        images = pt_to_pil(images)        
-        
-        image_grid = make_image_grid(images, cnt, cnt)
+        image_grid = make_image_grid(images, 4, 4)
         
         test_dir = os.path.join(config.output_dir, "samples")
         os.makedirs(test_dir, exist_ok=True)
@@ -169,20 +156,28 @@ def main():
             progress_bar.set_description(f"Epoch {epoch}")
             
             for batch in dataloader:
-                clean_images = batch["images"]                                
+                clean_images = batch["images"]   
+                
+                
+                noise = torch.randn(clean_images.shape).to(
+                            clean_images.device)
+                bs = clean_images.shape[0]
+                timesteps = torch.randint(0,
+                                noise_scheduler.config.num_train_timesteps,
+                                (bs,),
+                                device=clean_images.device).long()
+                noisy_images = noise_scheduler.add_noise(
+                    clean_images,
+                    noise,
+                    timesteps
+                )
+                                             
                 
                 with accelerator.accumulate(model):
-                    latent_dist = model.encode(clean_images).latent_dist
-                    latents = latent_dist.sample()
-                    latents_shape = latents.shape[1:]
-                    kl = latent_dist.kl()
-                    gen_images = model.decode(latents).sample
-                    
-                    loss = F.mse_loss(gen_images,
-                                      clean_images)
-                    
-                    loss += torch.mean(kl)*0.1
-                    
+                    noise_pred = model(noisy_images,
+                                       timesteps,
+                                       return_dict=False)[0]
+                    loss = torch.nn.functional.mse_loss(noise_pred, noise)
                     
                     accelerator.backward(loss)
                     accelerator.clip_grad_norm_(model.parameters(),1.0)
@@ -204,12 +199,10 @@ def main():
                 pipeline = DDPMPipeline(
                     unet=accelerator.unwrap_model(model),
                     scheduler=noise_scheduler)
-                
+
                 if(epoch+1)%config.save_image_epochs == 0:
-                    evaluate(config, epoch,
-                             accelerator.unwrap_model(model),
-                             latents_shape)
-                                                 
+                    evaluate(config, epoch, pipeline)
+                                                     
                 if(epoch+1)%config.save_model_epochs == 0:
                     pipeline.save_pretrained(config.output_dir)
 
