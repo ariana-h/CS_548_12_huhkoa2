@@ -13,6 +13,7 @@ Try/logs
 Try/training_checkpoints
 checkpoints/
 Assign02/Facades/
+Assign02/facade_dataset
 results/
 catdog/
 BasicGenTrain/
