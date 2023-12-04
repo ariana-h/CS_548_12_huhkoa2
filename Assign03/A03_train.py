@@ -21,7 +21,7 @@ class TrainingConfig:
     output_dir = "Assign03/gen_model"
     gradient_accumulation_steps = 1
     start_epoch = 0
-    total_epochs = 20 #100
+    total_epochs = 100
     learning_rate = 1e-4
     lr_warmup_steps = 500
     save_image_epochs = 10
