@@ -24,6 +24,10 @@ def main():
     if (not os.path.exists(modelLoc)):
         print("CANNOT FIND FINAL OR CHECKPOINT MODELS! EXITING!!!")
         exit(1)
+        
+    device = ("cuda" if torch.cuda.is_available()
+              else "mps" if torch.backends.mps.is_available()
+              else "cpu")
        
     model = UNet2DModel(
         in_channels = 3,
@@ -42,7 +46,7 @@ def main():
             "AttnUpBlock2D",
             "UpBlock2D","UpBlock2D","UpBlock2D","UpBlock2D"
         ]        
-    )
+    ).to(device)
    
     noise_scheduler = DDPMScheduler()
    

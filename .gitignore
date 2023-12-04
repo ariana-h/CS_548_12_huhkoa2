@@ -12,7 +12,7 @@ pylogs/
 Try/logs
 Try/training_checkpoints
 checkpoints/
-Assign02/Facades/
+Assign02/Facades/metadata.csv
 results/
 catdog/
 BasicGenTrain/
