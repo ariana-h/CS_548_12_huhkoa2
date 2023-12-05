@@ -8,7 +8,7 @@ import os
 
 @dataclass
 class GenConfig:
-    image_size = 128
+    image_size = 64
     model_dir = "Assign03/gen_model"
     output_dir = "Assign03/gen_images"
     seed = 0
